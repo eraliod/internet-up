@@ -1,0 +1,14 @@
+version: "3.6"
+
+services:
+# InternetUp - an ISP health check tool
+  internet-up:
+    container_name: internet-up
+    image: internet-up:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - $DOCKERDIR/apps/internetup/config:/data 
+    environment:
+      - TZ=$TZ
