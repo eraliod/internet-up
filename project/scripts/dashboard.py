@@ -2,7 +2,9 @@ import dash
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_table
 from dash.dependencies import Input, Output, State
+from pandas.io.pytables import IndexCol
 import plotly.express as px
 import pandas as pd
 import numpy as np
@@ -20,70 +22,112 @@ df['date'] = df['timestamp'].dt.date
 
 def my_agg(x):
     names = {
-        'outage_start': x['timestamp'].min(),
-        'outage_end':  x['timestamp'].max(),
-        'outage_duration': x['outage'].sum()}
+        'outage_start': x['timestamp'].min().strftime('%H:%M'),
+        'outage_end':  x['timestamp'].max().strftime('%H:%M'),
+        'outage_minutes': x['outage'].sum()}
 
-    return pd.Series(names, index=['outage_start','outage_end','outage_duration'])
+    return pd.Series(names, index=['outage_start','outage_end','outage_minutes'])
+
+df_outages = df[df['outage'] == 1].groupby('date', as_index=False).apply(my_agg)
+
+# there must be a different way
+df_outages['outage_duration'] = df_outages['outage_minutes'].apply(lambda x: str(x//60)+':'+str(x%60) if len(str(x%60)) == 2 else str(x//60)+':0'+str(x%60))
 
 
-df_outages_pre = df[df['outage'] == 1]
-df_outages = df_outages_pre.groupby('date', as_index=False).apply(my_agg)
-df_outages['outage_time_h'] = df_outages['outage_duration'] // 60
-df_outages['outage_time_m'] = df_outages['outage_duration'] % 60
-df_outages['actual_outage_time'] = dt.timedelta(minutes=10)
+# # stuff I tried and didn't work
+# # df_outages['actual_outage_time'] = df_outages['outage_duration'].apply( lambda x: dt.datetime.fromtimestamp(x*60).strftime('%H:%M'))
+# # df_outages['actual_outage_time'] = pd.to_timedelta(df_outages['outage_duration'],'m')
+# # df_outages['formatted_outage_time'] = df_outages['actual_outage_time'].apply( lambda x: x.strftime('%H:%M'))
 
-print(df.head())
-print(df_outages_pre.head())
-print(df_outages.head())
+# # print(df.head())
+# # print(df_outages.head())
 
-# '''declare chart'''
-# fig = px.line(df,x="timestamp", y="outage")
-# # fig = px.timeline(df,x_start="timestamp", x_end="timestamp", y="working")
+'''declare chart'''
+fig = px.line(df.groupby('date', as_index=False).apply(my_agg),x="date", y="outage_minutes")
+
+# '''declare table'''
+fig_table = dash_table.DataTable(
+    columns=[{"name": i, "id": i} for i in df_outages.columns], 
+    data=df_outages.to_dict('records')
+)
+
 
 # # fig.show()
 
-# '''declare layout elements'''
-# LOGO = "https://toppng.com/uploads/preview/internet-comments-internet-11563646434apfsgdhqj7.png"
+app.layout = dash_table.DataTable(
+    data=df_outages.to_dict('records'),
+    columns=[{'id': c, 'name': c} for c in df_outages.columns]
+)
 
-# #Navbar Layout
-# navbar = dbc.Navbar(
-#     dbc.Container(
-#         [
-#             html.A(
-#                 # Use row and col to control vertical alignment of logo / brand
-#                 dbc.Row(
-#                     [
-#                         dbc.Col(html.Img(src=LOGO, height="30px")),
-#                         dbc.Col(dbc.NavbarBrand("InternetUp - A tool to check ISP connectivity", className="ml-2")),
-#                     ],
-#                     align="center",
-#                     no_gutters=True,
-#                 ),
-#                 href="#",
-#             )
-#         ]
-#     ),
-#     color="dark",
-#     dark=True,
-#     className="mb-5",
-# )
+'''declare layout elements'''
+LOGO = "https://toppng.com/uploads/preview/internet-comments-internet-11563646434apfsgdhqj7.png"
 
-# # Graph Layout
-# graph = dcc.Graph(
-#     id = "line-graph",
-#     figure = fig
-# )
+#Navbar Layout
+navbar = dbc.Navbar(
+    dbc.Container(
+        [
+            html.A(
+                # Use row and col to control vertical alignment of logo / brand
+                dbc.Row(
+                    [
+                        dbc.Col(html.Img(src=LOGO, height="30px")),
+                        dbc.Col(dbc.NavbarBrand("InternetUp - A tool to check ISP connectivity", className="ml-2")),
+                    ],
+                    align="center",
+                    no_gutters=True,
+                ),
+                href="#",
+            )
+        ]
+    ),
+    color="dark",
+    dark=True,
+    className="mb-5",
+)
 
-# '''Initiate Layout'''
-# app.layout = html.Div(
-#     [navbar, graph]
-# )
+# Graph Layout
+graph = dcc.Graph(
+    id = "line-graph",
+    figure = fig
+)
 
-# # app.layout = html.Div([
-# #     dcc.Graph(figure=fig)
-# # ])
+fig.update_layout(
+    xaxis=dict(
+        showline=True,
+        showgrid=False,
+        showticklabels=True,
+        rangeslider_visible=True,
+        linecolor='rgb(204, 204, 204)',
+        linewidth=2,
+        ticks='outside',
+        tickfont=dict(
+            family='Arial',
+            size=12,
+            color='rgb(82, 82, 82)',
+        ),
+    ),
+    yaxis=dict(
+        showgrid=False,
+        zeroline=False,
+        showline=False,
+        showticklabels=False,
+    ),
+    autosize=False,
+    margin=dict(
+        autoexpand=False,
+        l=100,
+        r=20,
+        t=110,
+        b=150
+    ),
+    showlegend=False,
+    plot_bgcolor='white'
+)
 
+'''Initiate Layout'''
+app.layout = html.Div(
+    [navbar, graph, fig_table]
+)
 
-# if __name__ == '__main__':
-#     app.run_server(port='8083')
+if __name__ == '__main__':
+    app.run_server(port='8083') #debug=True

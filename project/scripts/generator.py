@@ -36,4 +36,17 @@ with open('log.csv','a') as log_file:
         log.extend(['connected','google',200,'69.33.43.235'])
         log_writer.writerow(log)
 
+    while x < 120000:
+        x+=1
+        now = now_start + timedelta(minutes=x)
+        log = [now.strftime("%Y-%m-%d %H:%M")]
+        log.extend(['connected','google',200,'69.33.34.176'])
+        log_writer.writerow(log)
+
+    while x < 150000:
+        x+=1
+        now = now_start + timedelta(minutes=x)
+        log = [now.strftime("%Y-%m-%d %H:%M")]
+        log.extend(['connected','google',200,'69.33.45.24'])
+        log_writer.writerow(log)
     print(x)
