@@ -14,50 +14,51 @@ import datetime as dt
 app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 '''Import Data'''
-df = pd.read_csv('log.csv')
-
-df['outage'] = np.where(df['connection'] == 'connected', 0, 1)
-df['timestamp'] = pd.to_datetime(df['timestamp'])
-df['date'] = df['timestamp'].dt.date
-
+# declare functions needed for data transformation
 def my_agg(x):
-    names = {
-        'outage_start': x['timestamp'].min().strftime('%H:%M'),
-        'outage_end':  x['timestamp'].max().strftime('%H:%M'),
-        'outage_minutes': x['outage'].sum()}
+        names = {
+            'outage_start': x['timestamp'].min().strftime('%H:%M'),
+            'outage_end':  x['timestamp'].max().strftime('%H:%M'),
+            'outage_minutes': x['outage'].sum()}
 
-    return pd.Series(names, index=['outage_start','outage_end','outage_minutes'])
+        return pd.Series(names, index=['outage_start','outage_end','outage_minutes'])
 
-df_outages = df[df['outage'] == 1].groupby('date', as_index=False).apply(my_agg)
+# declare the ETL of data as a function so it can be updated by the interval callback later
+def import_data(x):
+    df = pd.read_csv('log.csv')
+    df['outage'] = np.where(df['connection'] == 'connected', 0, 1)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['date'] = df['timestamp'].dt.date
 
-# there must be a different way
-df_outages['outage_duration'] = df_outages['outage_minutes'].apply(lambda x: str(x//60)+':'+str(x%60) if len(str(x%60)) == 2 else str(x//60)+':0'+str(x%60))
+    df_outages = df[df['outage'] == 1].groupby('date', as_index=False).apply(my_agg)
 
+    # there must be a different way
+    df_outages['outage_duration'] = df_outages['outage_minutes'].apply(lambda x: str(x//60)+':'+str(x%60) if len(str(x%60)) == 2 else str(x//60)+':0'+str(x%60))
+    df_outages.drop(columns=['outage_minutes'], inplace=True)
 
-# # stuff I tried and didn't work
-# # df_outages['actual_outage_time'] = df_outages['outage_duration'].apply( lambda x: dt.datetime.fromtimestamp(x*60).strftime('%H:%M'))
-# # df_outages['actual_outage_time'] = pd.to_timedelta(df_outages['outage_duration'],'m')
-# # df_outages['formatted_outage_time'] = df_outages['actual_outage_time'].apply( lambda x: x.strftime('%H:%M'))
+    if x == 'full': 
+        return df
+    elif x == 'outages':
+        return df_outages
 
-# # print(df.head())
-# # print(df_outages.head())
+df = import_data('full')
+df_outages = import_data('outages')
 
 '''declare chart'''
-fig = px.line(df.groupby('date', as_index=False).apply(my_agg),x="date", y="outage_minutes")
+fig = px.line(data_frame=df.groupby('date', as_index=False).apply(my_agg),x="date", y="outage_minutes", title='Outages Over Time')
 
-# '''declare table'''
-fig_table = dash_table.DataTable(
-    columns=[{"name": i, "id": i} for i in df_outages.columns], 
-    data=df_outages.to_dict('records')
-)
-
-
-# # fig.show()
-
-app.layout = dash_table.DataTable(
-    data=df_outages.to_dict('records'),
-    columns=[{'id': c, 'name': c} for c in df_outages.columns]
-)
+'''declare table'''
+# table = dbc.Table(id='table').from_dataframe(df_outages, striped=True, bordered=True, hover=True) #replaced with dash_table as it was easier to callback the data for changes
+table = dash_table.DataTable(
+        id='table',
+        data=df_outages.to_dict('records'),
+        columns=[{'name':i,'id':i} for i in df_outages.columns],
+        style_data_conditional=[
+        {
+            'if': {'row_index': 'odd'},
+            'backgroundColor': 'rgb(248, 248, 248)'
+        }
+    ])
 
 '''declare layout elements'''
 LOGO = "https://toppng.com/uploads/preview/internet-comments-internet-11563646434apfsgdhqj7.png"
@@ -91,7 +92,33 @@ graph = dcc.Graph(
     figure = fig
 )
 
-fig.update_layout(
+'''Initiate Layout'''
+app.layout = html.Div(
+    [html.H5(id='test-output')
+    ,navbar
+    ,html.Div(graph, className='container')
+    ,html.Div(table, className='container')
+    ,dcc.Interval(
+            id='interval-component',
+            interval=60*1000, # in milliseconds
+            n_intervals=0
+        )]
+)
+
+'''Define callbacks'''
+#timestamp call
+@app.callback(Output('test-output','children'),
+              Input('interval-component', 'n_intervals'))
+def update_test(n):
+    now =  dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return f'Time: {now}'
+
+# line graph call
+@app.callback(Output('line-graph','figure'),
+              Input('interval-component', 'n_intervals'))
+def update_line(n):  
+    df = import_data('full')
+    return px.line(data_frame=df.groupby('date', as_index=False).apply(my_agg),x="date", y="outage_minutes", title='Outages Over Time').update_layout(
     xaxis=dict(
         showline=True,
         showgrid=False,
@@ -105,6 +132,15 @@ fig.update_layout(
             size=12,
             color='rgb(82, 82, 82)',
         ),
+    rangeselector=dict(
+        buttons=list([
+            dict(count=1, label="1m", step="month", stepmode="backward"),
+            dict(count=6, label="6m", step="month", stepmode="backward"),
+            dict(count=1, label="YTD", step="year", stepmode="todate"),
+            dict(count=1, label="1y", step="year", stepmode="backward"),
+            dict(step="all")
+        ])
+    )
     ),
     yaxis=dict(
         showgrid=False,
@@ -124,10 +160,12 @@ fig.update_layout(
     plot_bgcolor='white'
 )
 
-'''Initiate Layout'''
-app.layout = html.Div(
-    [navbar, graph, fig_table]
-)
-
+# table call
+@app.callback(Output('table','data'),
+              Input('interval-component', 'n_intervals'))
+def update_table(n):  
+    df_outages = import_data('outages')
+    return df_outages.to_dict('records')
+    
 if __name__ == '__main__':
     app.run_server(port='8083') #debug=True
