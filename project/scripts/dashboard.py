@@ -9,6 +9,10 @@ import plotly.express as px
 import pandas as pd
 import numpy as np
 import datetime as dt
+import os
+
+dire = os.getcwd()
+print(dire)
 
 '''Initiate app'''
 app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -16,25 +20,30 @@ app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 '''Import Data'''
 # declare functions needed for data transformation
 def my_agg(x):
-        names = {
-            'outage_start': x['timestamp'].min().strftime('%H:%M'),
-            'outage_end':  x['timestamp'].max().strftime('%H:%M'),
-            'outage_minutes': x['outage'].sum()}
-
-        return pd.Series(names, index=['outage_start','outage_end','outage_minutes'])
+    names = {
+        'outage_start': x['timestamp'].min().strftime('%H:%M'),
+        'outage_end':  x['timestamp'].max().strftime('%H:%M'),
+        'outage_minutes': x['outage'].sum()}
+    return pd.Series(names, index=['outage_start','outage_end','outage_minutes'])
 
 # declare the ETL of data as a function so it can be updated by the interval callback later
 def import_data(x):
-    df = pd.read_csv('log.csv')
+    df = pd.read_csv('log.csv', dtype=str)
     df['outage'] = np.where(df['connection'] == 'connected', 0, 1)
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df['date'] = df['timestamp'].dt.date
 
-    df_outages = df[df['outage'] == 1].groupby('date', as_index=False).apply(my_agg)
+    print(df[df['outage'] == 1].shape[0])
+    if df[df['outage'] == 1].shape[0] > 0:
+        df_outages = df[df['outage'] == 1].groupby('date', as_index=False).apply(my_agg)
 
-    # there must be a different way
-    df_outages['outage_duration'] = df_outages['outage_minutes'].apply(lambda x: str(x//60)+':'+str(x%60) if len(str(x%60)) == 2 else str(x//60)+':0'+str(x%60))
-    df_outages.drop(columns=['outage_minutes'], inplace=True)
+        # there must be a different way
+        df_outages['outage_duration'] = df_outages['outage_minutes'].apply(lambda x: str(x//60)+':'+str(x%60) if len(str(x%60)) == 2 else str(x//60)+':0'+str(x%60))
+        # df_outages['outage_duration'] = df_outages['outage_minutes']/60
+        df_outages.drop(columns=['outage_minutes'], inplace=True)
+    else:
+        df_outages = pd.DataFrame(columns=['date','outage_start','outage_end','outage_duration'])
+        df_outages.loc[0] = ['N/A','N/A','N/A','N/A']
 
     if x == 'full': 
         return df
@@ -168,4 +177,5 @@ def update_table(n):
     return df_outages.to_dict('records')
     
 if __name__ == '__main__':
-    app.run_server(port='8083') #debug=True
+    # app.run_server(port='8083') #debug=True
+    app.run_server(host='0.0.0.0')

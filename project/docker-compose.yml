@@ -12,3 +12,15 @@ services:
       - $DOCKERDIR/apps/internetup/config:/data 
     environment:
       - TZ=$TZ
+    restart: unless-stopped
+
+  internet-up-dash:
+    container_name: internet-up-dash
+    image: internet-up-dash:latest
+    ports:
+      - 80:8050
+    volumes:
+      - $DOCKERDIR/apps/internetup/config:/data 
+    environment:
+      - TZ=$TZ
+    restart: unless-stopped

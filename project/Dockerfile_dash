@@ -1,0 +1,10 @@
+FROM python:3.9.6
+COPY /scripts/dashboard.py /bin/dashboard.py
+COPY requirements.txt /bin/requirements.txt
+# COPY log.csv /data/log.csv
+RUN chmod +x /bin/dashboard.py
+RUN pip install -r /bin/requirements.txt
+EXPOSE 8050
+# RUN apk add -U tzdata 
+CMD sleep 2m && python3 /bin/dashboard.py
+# CMD ["sleep","5000"]
