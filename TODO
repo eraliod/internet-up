@@ -1,1 +1,7 @@
 Add the ability to change the chron schedule so it is not just every minute (* * * * *)
+Enable docker start console from portainer
+Figure out how to get this into a repo to build without moving files
+Build a better dashboard
+Finish the environment variables and port number
+Hook into traefik
+more error handling
