@@ -5,3 +5,4 @@ Build a better dashboard
 Finish the environment variables and port number
 Hook into traefik
 more error handling
+use pathlib for correct path building

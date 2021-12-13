@@ -23,12 +23,12 @@ def my_agg(x):
     names = {
         'outage_start': x['timestamp'].min().strftime('%H:%M'),
         'outage_end':  x['timestamp'].max().strftime('%H:%M'),
-        'outage_minutes': x['outage'].sum()}
+        'outage_minutes': x['outage'].sum()} #this is where I need to edit to make the last column better *60 or also math.ceil()
     return pd.Series(names, index=['outage_start','outage_end','outage_minutes'])
 
 # declare the ETL of data as a function so it can be updated by the interval callback later
 def import_data(x):
-    df = pd.read_csv('log.csv', dtype=str)
+    df = pd.read_csv('data/log.csv', dtype=str)
     df['outage'] = np.where(df['connection'] == 'connected', 0, 1)
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df['date'] = df['timestamp'].dt.date
